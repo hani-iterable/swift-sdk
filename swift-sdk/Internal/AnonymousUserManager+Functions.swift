@@ -383,6 +383,12 @@ struct CriteriaCompletionChecker {
                   doesKeyExist = filteredLocalDataKeys.filter {$0 as! String == field }.count > 0
               }
               
+              if field.contains(".") {
+                  if let valueFromObj = getValueFromNestedObject(eventData: eventData, field: field) {
+                      return evaluateComparison(comparatorType: query[JsonKey.CriteriaItem.comparatorType] as! String, matchObj: valueFromObj, valueToCompare: query[JsonKey.CriteriaItem.value] as? String)
+                  }
+              }
+              
               if doesKeyExist {
                   if (evaluateComparison(comparatorType: query[JsonKey.CriteriaItem.comparatorType] as! String, matchObj: eventData[field] ?? "", valueToCompare: query[JsonKey.CriteriaItem.value] as? String)) {
                       return true
@@ -392,7 +398,34 @@ struct CriteriaCompletionChecker {
           }
           return matchResult
       }
-
+    
+    func getValueFromNestedObject(eventData: Any, field: String) -> Any? {
+        guard let valueFromObj = getFieldValue(data: eventData, field: field) else {
+            return nil
+        }
+        
+        if let dictionary = valueFromObj as? [String: Any] {
+            let keys = dictionary.keys
+            return keys.reduce(nil) { (acc, key) -> Any? in
+                if acc == nil {
+                    return getValueFromNestedObject(eventData: dictionary, field: key)
+                }
+                return acc
+            }
+        }
+        
+        return valueFromObj
+    }
+    
+    func getFieldValue(data: Any, field: String) -> Any? {
+        let fields = field.split(separator: ".").map { String($0) }
+        return fields.reduce(data) { (value, currentField) -> Any? in
+            if let dictionary = value as? [String: Any], let fieldValue = dictionary[currentField] {
+                return fieldValue
+            }
+            return nil
+        }
+    }
 
     func evaluateComparison(comparatorType: String, matchObj: Any, valueToCompare: String?) -> Bool {
         guard var stringValue = valueToCompare else {
